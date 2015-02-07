@@ -66,24 +66,8 @@ module Rake
     end
 
     def cf(region)
-      AWS.config(
-        :access_key_id => access_key_id,
-        :secret_access_key => secret_access_key,
-        :region => region
-      )
+      AWS.config(:region => region)
       AWS::CloudFormation.new
-    end
-
-    def access_key_id
-      credential_file_hash['AWKAccessKeyId']
-    end
-
-    def secret_access_key
-      credential_file_hash['AWSSecretKey']
-    end
-
-    def credential_file_hash
-      Hash[*File.read(ENV['AWS_CREDENTIAL_FILE']).split(/[=\n]/)]
     end
   end
 end
