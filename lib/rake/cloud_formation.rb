@@ -1,5 +1,6 @@
 # ex: syntax=ruby ts=2 sw=2 si et
 require 'aws-sdk'
+require 'set'
 
 module Rake
   module CloudFormation
@@ -15,8 +16,8 @@ module Rake
         super
         @region = 'us-east-1'
         @parameters = {}
-        @capabilities = []
-        @notification_arns = []
+        @capabilities = Set.new
+        @notification_arns = Set.new
       end
 
       def self.define_task(args, &block)
@@ -66,7 +67,7 @@ module Rake
           end
         end
         options[:capabilities] = capabilities.to_a unless capabilities.empty?
-        options[:notification_arns] = notification_arns unless notification_arns.empty?
+        options[:notification_arns] = notification_arns.to_a unless notification_arns.empty?
         puts "Creating CloudFormation stack: #{name}"
         cf(region).create_stack(options)
         while cf(region).describe_stacks({stack_name: name}).stacks.first.stack_status === 'CREATE_IN_PROGRESS'
