@@ -10,7 +10,7 @@ Gem::Specification.new do |gem|
   gem.files         = `git ls-files`.split($\)
   gem.name          = 'rake-cloudformation'
   gem.require_paths = [ 'lib' ]
-  gem.version       = '2'
+  gem.version       = '3'
 
-  gem.add_runtime_dependency 'aws-sdk', '~> 1.59'
+  gem.add_runtime_dependency 'aws-sdk', '~> 2'
 end

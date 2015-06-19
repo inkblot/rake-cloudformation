@@ -1,5 +1,5 @@
 # ex: syntax=ruby ts=2 sw=2 si et
-require 'aws/cloud_formation'
+require 'aws-sdk'
 
 module Rake
   module CloudFormation
@@ -16,6 +16,7 @@ module Rake
         @region = 'us-east-1'
         @parameters = {}
         @capabilities = []
+        @notification_arns = []
       end
 
       def self.define_task(args, &block)
@@ -28,46 +29,57 @@ module Rake
       end
 
       attr_accessor :template, :region
-      attr_reader :parameters, :capabilities
+      attr_reader :parameters, :capabilities, :notification_arns
 
       def prepare
         prerequisites << file(@template)
       end
 
       def needed?
-        !cf(region).stacks[name].exists? or cf(region).stacks[name].status != 'CREATE_COMPLETE'
+        begin
+          cf(region).describe_stacks({stack_name: name}).stacks.first.stack_status != 'CREATE_COMPLETE'
+        rescue
+          true
+        end
       end
 
       def execute(*args)
         super
-        options = {}
+        options = {
+          stack_name: name,
+          template_body: IO.read(template),
+        }
         unless parameters.empty?
-          options[:parameters] = parameters.inject({}) do |hash, (key, value)|
+          options[:parameters] = parameters.inject([]) do |params, (key, value)|
+            param = {
+              :parameter_key => key
+            }
             if value.is_a?(String)
-              hash[key] = value
+              param[:parameter_value] = value
             elsif value.is_a?(Proc)
-              hash[key] = value.call
+              param[:parameter_value] = value.call
             else
               raise "Parameter value of unknown type: key=#{key.inspect} value=#{value.inspect}"
             end
-            hash
+            params << param
+            params
           end
         end
-        options[:capabilities] = capabilities unless capabilities.empty?
+        options[:capabilities] = capabilities.to_a unless capabilities.empty?
+        options[:notification_arns] = notification_arns unless notification_arns.empty?
         puts "Creating CloudFormation stack: #{name}"
-        cf(region).stacks.create(name, IO.read(template), options)
-        while cf(region).stacks[name].status === 'CREATE_IN_PROGRESS'
+        cf(region).create_stack(options)
+        while cf(region).describe_stacks({stack_name: name}).stacks.first.stack_status === 'CREATE_IN_PROGRESS'
           sleep 20
         end
-        unless cf(region).stacks[name].status === 'CREATE_COMPLETE'
+        unless cf(region).describe_stacks({stack_name: name}).stacks.first.stack_status === 'CREATE_COMPLETE'
           raise "Stack creation failed"
         end
       end
     end
 
     def cf(region)
-      AWS.config(:region => region)
-      AWS::CloudFormation.new
+      Aws::CloudFormation::Client.new(region: region)
     end
   end
 end
@@ -77,7 +89,8 @@ def cfn_stack(args, &block)
 end
 
 def cfn_get_stack_output(stack_name, region, output_key)
-  Rake::CloudFormation::Service.cf(region).stacks[stack_name].outputs.detect { |o| o.key === output_key }.value
+  Rake::CloudFormation::Service.cf(region).describe_stacks({stack_name: stack_name}).stacks.first.outputs
+    .detect { |o| o.output_key === output_key }.output_value
 end
 
 def cfn_stack_output(*args)
